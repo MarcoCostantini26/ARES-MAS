@@ -1,0 +1,11 @@
+MAS ares_mas {
+    infrastructure: Centralised
+
+    environment: AresEnvironment
+
+    agents:
+        scout1;
+        harv1;
+
+    classpath: "build/classes/kotlin/main";
+}
