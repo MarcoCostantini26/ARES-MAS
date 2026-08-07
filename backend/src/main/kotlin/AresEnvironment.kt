@@ -1,6 +1,8 @@
 import com.google.gson.Gson
 import jason.asSyntax.*
 import jason.environment.Environment
+import alice.tuprolog.Prolog
+import alice.tuprolog.Theory
 import java.io.File
 import java.nio.file.Paths
 
@@ -14,6 +16,8 @@ class AresEnvironment : Environment() {
     private var tick = 0
     private lateinit var scenario: ScenarioData
     private var isScenarioLoaded = false
+    
+    private val prologEngine = Prolog()
 
     override fun init(args: Array<String>) {
         val workingDir = Paths.get("").toAbsolutePath().toString()
@@ -26,20 +30,35 @@ class AresEnvironment : Environment() {
             scenario = Gson().fromJson(scenarioFile.readText(), ScenarioData::class.java)
             isScenarioLoaded = true
             println("🪐 Scenario loaded: ${scenario.entities.size} entities found.")
+            
+            val rulesFile = File(dataDir, "rules.pl")
+            if (rulesFile.exists()) {
+                prologEngine.setTheory(Theory(rulesFile.readText()))
+                
+                for (entity in scenario.entities) {
+                    if (entity.type == "HAZARD") {
+                        val hx = entity.position[0]
+                        val hy = entity.position[1]
+                        prologEngine.addTheory(Theory("hazard($hx, $hy)."))
+                    }
+                }
+                println("tuProlog Guardrail Initialized successfully.")
+            } else {
+                println("❌ ERROR: rules.pl file not found!")
+            }
+            
             updatePercepts()
         } else {
-            println("ERROR: Scenario.json file not found!")
+            println("ERROR: scenario.json file not found!")
         }
     }
 
     private fun updatePercepts() {
-        if (!isScenarioLoaded) return
-        
+        if (!isScenarioLoaded) return 
         clearPercepts() 
         for (entity in scenario.entities) {
             val x = entity.position[0]
             val y = entity.position[1]
-            
             when (entity.type) {
                 "MINERAL" -> addPercept(Literal.parseLiteral("mineral($x, $y)"))
                 "HAZARD" -> addPercept(Literal.parseLiteral("hazard($x, $y, \"sandstorm\")"))
@@ -55,9 +74,20 @@ class AresEnvironment : Environment() {
             val x = (action.getTerm(0) as NumberTerm).solve().toInt()
             val y = (action.getTerm(1) as NumberTerm).solve().toInt()
             
-            val ev = """{"tick": $tick, "type": "MOVE", "rover": "$agName", "to": [$x, $y]}"""
-            logFile.appendText(ev + "\n")
-            println("Action performed by $agName: move a [$x, $y]")
+            val query = "safe_to_move($x, $y)."
+            val solveInfo = prologEngine.solve(query)
+            
+            if (solveInfo.isSuccess) {
+                val ev = """{"tick": $tick, "type": "MOVE", "rover": "$agName", "to": [$x, $y]}"""
+                logFile.appendText(ev + "\n")
+                println("Action executed by $agName: move to [$x, $y]")
+            } else {
+                val ev = """{"tick": $tick, "type": "VIOLATION", "rover": "$agName", "attempted_to": [$x, $y], "reason": "unsafe_move"}"""
+                logFile.appendText(ev + "\n")
+                println("GUARDRAIL ACTIVE: Movement of $agName to [$x, $y] blocked by tuProlog!")
+                
+                return false 
+            }
         }
         
         if (functor == "log_cnp") {

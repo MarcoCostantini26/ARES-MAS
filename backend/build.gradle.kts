@@ -16,6 +16,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("io.github.jason-lang:jason-interpreter:3.3.1")
     implementation("org.antlr:antlr4:4.12.0")
+    implementation("it.unibo.alice.tuprolog:tuprolog:3.3.0")
 }
 
 application {

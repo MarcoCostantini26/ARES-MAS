@@ -1,0 +1,1 @@
+safe_to_move(X, Y) :- \+ hazard(X, Y).

@@ -1,17 +1,25 @@
 !explore.
 
 +!explore <- 
-    .print("Scouts online, let's explore!");
+    .print("Scout online, starting exploration!");
     .wait(1000); move(1, 1); 
-    .wait(1000); move(2, 3);
+    
+    .print("Attempting to cross zone [5, 5]...");
+    .wait(1000); move(5, 5); 
+    
     .wait(1000); move(3, 4);
     .print("Reconnaissance completed!").
+
+-!explore <- 
+    .print("PLAN FAILED: Movement blocked! The safety system took control.");
+    .print("Replanning a new route to bypass the hazard...");
+    move(3, 4).
 
 +mineral(X, Y) : not already_handled(X, Y) <- 
     +already_handled(X, Y);
     .my_name(Me);
-    .print("I sensed a mineral at the coordinates: [", X, ", ", Y, "]!");
-    .print("CFP launch to all collectors...");
+    .print("WOW! I perceived a mineral at coordinates: [", X, ", ", Y, "]!");
+    .print("Broadcasting CFP to all harvesters...");
     
     log_cnp(cfp, mineral(X,Y), Me, all);
     .broadcast(tell, cfp(mineral(X,Y)));
@@ -24,7 +32,7 @@
     .print("Proposals collected: ", Offers);
     
     if (Offers == []) {
-        .print("No proposal received for the mineral at [", X, ",", Y, "]. No assignment.");
+        .print("No proposals received for the mineral at [", X, ",", Y, "]. No assignment.");
     } else {
         .min(Offers, offer(BestCost, Best));
         .print("Winner: ", Best, " with cost ", BestCost);
