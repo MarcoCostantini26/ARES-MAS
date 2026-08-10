@@ -1,3 +1,5 @@
+package ares
+
 import com.google.gson.Gson
 import jason.asSyntax.*
 import jason.environment.Environment
@@ -12,11 +14,18 @@ data class EntityData(val id: String, val type: String, val position: List<Int>)
 
 class AresEnvironment : Environment() {
     
+    companion object {
+        var gridWidth = 10
+        var gridHeight = 10
+        var hazardList = listOf<Pair<Int, Int>>()
+    }
+
     private lateinit var logFile: File
     private var tick = 0
     private lateinit var scenario: ScenarioData
     private var isScenarioLoaded = false
     
+    // Prolog Engine for the Guardrail
     private val prologEngine = Prolog()
 
     override fun init(args: Array<String>) {
@@ -29,24 +38,23 @@ class AresEnvironment : Environment() {
         if (scenarioFile.exists()) {
             scenario = Gson().fromJson(scenarioFile.readText(), ScenarioData::class.java)
             isScenarioLoaded = true
+            
+            gridWidth = scenario.grid.width
+            gridHeight = scenario.grid.height
+            hazardList = scenario.entities.filter { it.type == "HAZARD" }.map { Pair(it.position[0], it.position[1]) }
+            
             println("🪐 Scenario loaded: ${scenario.entities.size} entities found.")
             
             val rulesFile = File(dataDir, "rules.pl")
             if (rulesFile.exists()) {
                 prologEngine.setTheory(Theory(rulesFile.readText()))
-                
-                for (entity in scenario.entities) {
-                    if (entity.type == "HAZARD") {
-                        val hx = entity.position[0]
-                        val hy = entity.position[1]
-                        prologEngine.addTheory(Theory("hazard($hx, $hy)."))
-                    }
+                for (hazard in hazardList) {
+                    prologEngine.addTheory(Theory("hazard(${hazard.first}, ${hazard.second})."))
                 }
                 println("tuProlog Guardrail Initialized successfully.")
             } else {
-                println("❌ ERROR: rules.pl file not found!")
+                println("ERROR: rules.pl file not found!")
             }
-            
             updatePercepts()
         } else {
             println("ERROR: scenario.json file not found!")
@@ -60,8 +68,8 @@ class AresEnvironment : Environment() {
             val x = entity.position[0]
             val y = entity.position[1]
             when (entity.type) {
-                "MINERAL" -> addPercept(Literal.parseLiteral("mineral($x, $y)"))
-                "HAZARD" -> addPercept(Literal.parseLiteral("hazard($x, $y, \"sandstorm\")"))
+                "MINERAL" -> addPercept(ASSyntax.createLiteral("mineral", ASSyntax.createNumber(x.toDouble()), ASSyntax.createNumber(y.toDouble())))
+                "HAZARD" -> addPercept(ASSyntax.createLiteral("hazard", ASSyntax.createNumber(x.toDouble()), ASSyntax.createNumber(y.toDouble()), ASSyntax.createString("sandstorm")))
             }
         }
     }
@@ -85,7 +93,6 @@ class AresEnvironment : Environment() {
                 val ev = """{"tick": $tick, "type": "VIOLATION", "rover": "$agName", "attempted_to": [$x, $y], "reason": "unsafe_move"}"""
                 logFile.appendText(ev + "\n")
                 println("GUARDRAIL ACTIVE: Movement of $agName to [$x, $y] blocked by tuProlog!")
-                
                 return false 
             }
         }

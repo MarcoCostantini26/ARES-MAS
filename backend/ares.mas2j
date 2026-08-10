@@ -1,6 +1,6 @@
 MAS ares_mas {
     infrastructure: Centralised
-    environment: AresEnvironment
+    environment: ares.AresEnvironment
     agents:
         scout1 scout.asl;
         harv1 harvester.asl;
