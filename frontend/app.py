@@ -3,16 +3,10 @@ import pandas as pd
 import json
 import matplotlib.pyplot as plt
 import os
+import re
+import time
 
 st.set_page_config(page_title="ARES-MAS Dashboard", layout="wide")
-
-col_title, col_btn = st.columns([4, 1])
-with col_title:
-    st.title("🪐 ARES-MAS: Explainability Dashboard")
-with col_btn:
-    st.write("") # Spaziatura
-    if st.button("Live (Polling)"):
-        st.rerun()
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SCENARIO_FILE = os.path.join(DATA_DIR, "scenario.json")
@@ -36,27 +30,54 @@ scenario = load_scenario()
 events = load_events()
 
 if not events:
-    st.warning("No event found...")
+    st.warning("No events found. Run the Kotlin backend to generate the logs!")
     st.stop()
 
 max_tick = max([e.get("tick", 0) for e in events])
-selected_tick = st.slider("Time machine", 0, max_tick, max_tick)
+
+if "tick_slider" not in st.session_state:
+    st.session_state.tick_slider = 0
+if "playing" not in st.session_state:
+    st.session_state.playing = False
+
+def toggle_play():
+    st.session_state.playing = not st.session_state.playing
+
+if st.session_state.playing:
+    if st.session_state.tick_slider < max_tick:
+        st.session_state.tick_slider += 1
+    else:
+        st.session_state.playing = False
+
+# Header and Controls
+col_title, col_play = st.columns([4, 1])
+col_title.title("🪐 ARES-MAS: Explainability Dashboard")
+col_play.write("")
+col_play.button("⏯️ Play / Pause", on_click=toggle_play)
+
+selected_tick = st.slider("⏱️ Time Machine", 0, max_tick, key="tick_slider")
 
 current_events = [e for e in events if e.get("tick", 0) <= selected_tick]
+current_tick_events = [e for e in events if e.get("tick", 0) == selected_tick]
 
+rover_paths = {}
 rover_positions = {}
 for e in current_events:
     if e["type"] == "MOVE":
-        rover_positions[e["rover"]] = e["to"]
+        rover = e["rover"]
+        if rover not in rover_paths:
+            rover_paths[rover] = {"x": [], "y": []}
+        rover_paths[rover]["x"].append(e["to"][0])
+        rover_paths[rover]["y"].append(e["to"][1])
+        rover_positions[rover] = e["to"]
 
 col_map, col_explain = st.columns([1, 1.2])
 
 with col_map:
-    st.subheader("Sensorial map")
+    st.subheader("🗺️ Sensory Map")
     
     width = scenario["grid"]["width"]
     height = scenario["grid"]["height"]
-    
     fig, ax = plt.subplots(figsize=(6, 6))
     ax.set_xlim(-0.5, width - 0.5)
     ax.set_ylim(-0.5, height - 0.5)
@@ -68,9 +89,13 @@ with col_map:
     for ent in scenario["entities"]:
         x, y = ent["position"]
         if ent["type"] == "MINERAL":
-            ax.plot(x, y, "bD", markersize=12, label="Minerale")
+            ax.plot(x, y, "bD", markersize=12, label="Mineral")
         elif ent["type"] == "HAZARD":
-            ax.plot(x, y, "rX", markersize=14, label="Tempesta (Hazard)")
+            ax.plot(x, y, "rX", markersize=14, label="Hazard")
+
+    for rover, path in rover_paths.items():
+        if path["x"]:
+            ax.plot(path["x"], path["y"], color="gray", linestyle=":", linewidth=2, alpha=0.6)
 
     for rover, pos in rover_positions.items():
         color = "gold" if "scout" in rover else "orange"
@@ -78,35 +103,80 @@ with col_map:
         ax.plot(pos[0], pos[1], marker=marker, color=color, markersize=15, markeredgecolor="black")
         ax.text(pos[0], pos[1]-0.3, rover, ha='center', fontsize=9, fontweight='bold')
 
-    ax.plot(0, 0, "gP", markersize=16, label="Base")
+    for e in current_tick_events:
+        if e["type"] == "VIOLATION":
+            hx, hy = e["attempted_to"]
+            ax.plot(hx, hy, "ro", markersize=30, alpha=0.3)
+            ax.text(hx, hy+0.4, "BLOCKED!", color='red', ha='center', fontweight='bold')
+
+    ax.plot(0, 0, "gP", markersize=16, label="Base Station")
     
-    plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1))
+    # Avoid duplicate labels in legend
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), loc='upper right', bbox_to_anchor=(1.25, 1))
+    
     st.pyplot(fig)
 
 
 with col_explain:
-    st.subheader("Logic of system (Explainability)")
     
-    st.markdown("### Negotiation state (Contract Net)")
-    cnp_events = [e for e in current_events if e["type"] == "NEGOTIATION"]
-    if cnp_events:
-        df_cnp = pd.DataFrame(cnp_events)[["tick", "sender", "msg_type", "content", "receiver"]]
-        st.dataframe(df_cnp.tail(6), use_container_width=True)
+    # --- 1. EVENT NARRATIVE ---
+    st.subheader("📜 Mission Log")
+    narrative = []
+    for e in current_events:
+        t = e['tick']
+        if e["type"] == "NEGOTIATION":
+            if e["msg_type"] == "cfp":
+                narrative.append(f"**Tick {t}:** 📡 `{e['sender']}` initiated a CNP auction.")
+            elif e["msg_type"] == "accept":
+                narrative.append(f"**Tick {t}:** 🏆 `{e['receiver']}` won the extraction contract.")
+        elif e["type"] == "VIOLATION":
+            narrative.append(f"**Tick {t}:** 🚨 `{e['rover']}` attempted a dangerous move at {e['attempted_to']}. Prolog intervention active.")
+        elif e["type"] == "PLANNING":
+            narrative.append(f"**Tick {t}:** 🧠 `{e['rover']}` delegated the return plan to the STRIPS Engine.")
+            
+    if narrative:
+        with st.container(height=150): 
+            for line in narrative[::-1]: 
+                st.write(line)
     else:
-        st.info("No negotiation.")
+        st.write("No relevant events recorded yet.")
+    
+    st.divider()
 
-    st.markdown("### tuProlog (Security)")
+    st.markdown("### 🤝 Contract Net Protocol Auction")
+    cnp_proposals = [e for e in current_events if e["type"] == "NEGOTIATION" and e["msg_type"] == "propose"]
+    if cnp_proposals:
+        costs = {}
+        for p in cnp_proposals:
+            match = re.findall(r'\d+', p["content"])
+            if match:
+                costs[p["sender"]] = int(match[-1])
+                
+        if costs:
+            st.write("Bids Comparison (Estimated Cost):")
+            st.bar_chart(pd.DataFrame.from_dict(costs, orient='index', columns=['Cost']), height=150)
+    else:
+        st.info("No bids recorded at the current tick.")
+
+    st.markdown("### 🛡️ Ethical Guardrail (tuProlog)")
     violation_events = [e for e in current_events if e["type"] == "VIOLATION"]
     if violation_events:
-        for v in violation_events:
-            st.error(f"**Tick {v['tick']}**: Agent `{v['rover']}` try to move in {v['attempted_to']}. **Action blocked by tuProlog** (Cause: {v['reason']}).")
+        v = violation_events[-1]
+        st.error(f"**Violation blocked at Tick {v['tick']}** for agent `{v['rover']}`")
+        st.markdown("**Partial Proof-Tree (Failed logical derivation):**")
+        st.code(f"""?- safe_to_move({v['attempted_to'][0]}, {v['attempted_to'][1]}).
+-> Rule: {v.get('rule_evaluated', 'N/A')}
+-> Blocking fact: {v.get('hazard_matched', 'N/A')}
+-> Result: FALSE (Action denied)""", language="prolog")
     else:
-        st.success("All moves are safe.")
+        st.success("All movements are ethically safe.")
 
-    st.markdown("### Automated Planning (STRIPS)")
-    plan_events = [e for e in current_events if e["type"] == "PLANNING"]
-    if plan_events:
-        for p in plan_events:
-            st.info(f"**Tick {p['tick']}**: `{p['rover']}` he delegated the return. Plan calculated: `{p['plan']}`")
+if st.session_state.playing:
+    if st.session_state.tick_slider < max_tick:
+        time.sleep(0.3)
+        st.rerun()
     else:
-        st.write("No STRIPS plan generated")
+        st.session_state.playing = False
+        st.rerun()

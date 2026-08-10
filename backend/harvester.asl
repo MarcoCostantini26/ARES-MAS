@@ -12,7 +12,7 @@
     
     .print("My calculated cost is ", Cost, ". Send proposal to ", S, "...");
     
-    log_cnp(propose, mineral(X,Y), Me, S);
+    log_cnp(propose, offer(mineral(X,Y), Cost), Me, S);
     .send(S, tell, propose(mineral(X,Y), Cost)).
 
 +accept(mineral(X,Y))[source(S)] <- 
