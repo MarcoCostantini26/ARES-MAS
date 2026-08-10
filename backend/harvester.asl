@@ -24,7 +24,7 @@
     
     .print("CRITICAL BATTERY DETECTED! Requesting route from STRIPS Engine...");
     
-    strips.plan_return(X, Y, 0, 0, Plan);
+    strips.plan_return(Me, X, Y, 0, 0, Plan);
     
     .print("STRIPS returned the following plan: ", Plan);
     .print("Initiating physical return sequence...");

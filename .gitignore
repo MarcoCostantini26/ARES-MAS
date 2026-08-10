@@ -1,0 +1,30 @@
+# =========================
+# IDEs & OS
+# =========================
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# =========================
+# Backend (Gradle / Kotlin / Java)
+# =========================
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+
+# =========================
+# Frontend (Python / Streamlit)
+# =========================
+frontend/.venv/
+frontend/__pycache__/
+frontend/*.pyc
+frontend/*.pyo
+frontend/.pytest_cache/
+
+# =========================
+# Data & Logs
+# =========================
+data/events.jsonl

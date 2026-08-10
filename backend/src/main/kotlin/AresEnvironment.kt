@@ -18,21 +18,29 @@ class AresEnvironment : Environment() {
         var gridWidth = 10
         var gridHeight = 10
         var hazardList = listOf<Pair<Int, Int>>()
+        lateinit var logFile: File
+        var globalTick = 0 
+
+        fun logPlanningEvent(agName: String, plan: List<String>) {
+            val ev = """{"tick": $globalTick, "type": "PLANNING", "rover": "$agName", "plan": ${Gson().toJson(plan)}}"""
+            logFile.appendText(ev + "\n")
+        }
     }
 
-    private lateinit var logFile: File
+    private lateinit var instanceLogFile: File
     private var tick = 0
     private lateinit var scenario: ScenarioData
     private var isScenarioLoaded = false
-    
-    // Prolog Engine for the Guardrail
     private val prologEngine = Prolog()
 
     override fun init(args: Array<String>) {
         val workingDir = Paths.get("").toAbsolutePath().toString()
         val dataDir = if (workingDir.endsWith("backend")) File(workingDir, "../data") else File(workingDir, "data")
-        logFile = File(dataDir, "events.jsonl")
-        logFile.writeText("") 
+        
+        instanceLogFile = File(dataDir, "events.jsonl")
+        instanceLogFile.writeText("") 
+        
+        logFile = instanceLogFile
 
         val scenarioFile = File(dataDir, "scenario.json")
         if (scenarioFile.exists()) {
@@ -52,12 +60,8 @@ class AresEnvironment : Environment() {
                     prologEngine.addTheory(Theory("hazard(${hazard.first}, ${hazard.second})."))
                 }
                 println("tuProlog Guardrail Initialized successfully.")
-            } else {
-                println("ERROR: rules.pl file not found!")
             }
             updatePercepts()
-        } else {
-            println("ERROR: scenario.json file not found!")
         }
     }
 
@@ -68,14 +72,16 @@ class AresEnvironment : Environment() {
             val x = entity.position[0]
             val y = entity.position[1]
             when (entity.type) {
-                "MINERAL" -> addPercept(ASSyntax.createLiteral("mineral", ASSyntax.createNumber(x.toDouble()), ASSyntax.createNumber(y.toDouble())))
-                "HAZARD" -> addPercept(ASSyntax.createLiteral("hazard", ASSyntax.createNumber(x.toDouble()), ASSyntax.createNumber(y.toDouble()), ASSyntax.createString("sandstorm")))
+                "MINERAL" -> addPercept(Literal.parseLiteral("mineral($x, $y)"))
+                "HAZARD" -> addPercept(Literal.parseLiteral("hazard($x, $y, \"sandstorm\")"))
             }
         }
     }
 
     override fun executeAction(agName: String, action: Structure): Boolean {
         tick++
+        globalTick = tick
+        
         val functor = action.functor 
         
         if (functor == "move") {
@@ -87,11 +93,11 @@ class AresEnvironment : Environment() {
             
             if (solveInfo.isSuccess) {
                 val ev = """{"tick": $tick, "type": "MOVE", "rover": "$agName", "to": [$x, $y]}"""
-                logFile.appendText(ev + "\n")
+                instanceLogFile.appendText(ev + "\n")
                 println("Action executed by $agName: move to [$x, $y]")
             } else {
                 val ev = """{"tick": $tick, "type": "VIOLATION", "rover": "$agName", "attempted_to": [$x, $y], "reason": "unsafe_move"}"""
-                logFile.appendText(ev + "\n")
+                instanceLogFile.appendText(ev + "\n")
                 println("GUARDRAIL ACTIVE: Movement of $agName to [$x, $y] blocked by tuProlog!")
                 return false 
             }
@@ -104,7 +110,7 @@ class AresEnvironment : Environment() {
             val receiver = action.getTerm(3).toString()
             
             val ev = """{"tick": $tick, "type": "NEGOTIATION", "msg_type": "$msgType", "content": "$content", "sender": "$sender", "receiver": "$receiver"}"""
-            logFile.appendText(ev + "\n")
+            instanceLogFile.appendText(ev + "\n")
         }
         
         updatePercepts() 

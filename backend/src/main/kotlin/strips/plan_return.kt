@@ -12,20 +12,24 @@ data class StripsAction(val name: Literal, val pre: Set<String>, val add: Set<St
 class plan_return : DefaultInternalAction() {
 
     override fun execute(ts: TransitionSystem, un: Unifier, args: Array<Term>): Boolean {
-        val cx = (args[0] as NumberTerm).solve().toInt()
-        val cy = (args[1] as NumberTerm).solve().toInt()
-        val bx = (args[2] as NumberTerm).solve().toInt()
-        val by = (args[3] as NumberTerm).solve().toInt()
+        val agName = args[0].toString()
+        val cx = (args[1] as NumberTerm).solve().toInt()
+        val cy = (args[2] as NumberTerm).solve().toInt()
+        val bx = (args[3] as NumberTerm).solve().toInt()
+        val by = (args[4] as NumberTerm).solve().toInt()
 
-        ts.logger.info("STRIPS Engine activated for route [$cx, $cy] to [$bx, $by]")
+        println("STRIPS Engine activated for route [$cx, $cy] to [$bx, $by]")
 
         val planList = computeStripsPlan(cx, cy, bx, by)
 
-        return if (planList != null) {
-            un.unifies(args[4], planList)
+        if (planList != null) {
+            val planStrings = planList.map { it.toString() }
+            AresEnvironment.logPlanningEvent(agName, planStrings)
+            
+            return un.unifies(args[5], planList)
         } else {
-            ts.logger.severe("STRIPS Failed: No safe path found!")
-            false
+            println("STRIPS Failed: No safe path found!")
+            return false
         }
     }
 
@@ -61,9 +65,7 @@ class plan_return : DefaultInternalAction() {
 
             for ((nx, ny) in possibleMoves) {
                 if (nx in 0 until width && ny in 0 until height && !hazards.contains(Pair(nx, ny))) {
-                    
                     val moveLiteral = ASSyntax.createLiteral("move", ASSyntax.createNumber(nx.toDouble()), ASSyntax.createNumber(ny.toDouble()))
-                    
                     val action = StripsAction(
                         name = moveLiteral,
                         pre = setOf("at($cx,$cy)"),
