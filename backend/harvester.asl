@@ -33,7 +33,8 @@
 
 
 +!execute_plan([]) <- 
-    .print("Safely returned to base!").
+    .print("Safely returned to base!");
+    mission_complete.
 
 +!execute_plan([move(NX, NY) | Rest]) <- 
     move(NX, NY);

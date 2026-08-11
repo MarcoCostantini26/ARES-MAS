@@ -3,12 +3,21 @@
 +!explore <- 
     .print("Scout online, starting exploration!");
     .wait(1000); move(1, 1); 
-    
-    .print("Attempting to cross zone [5, 5]...");
-    .wait(1000); move(5, 5); 
-    
+    .wait(1000); move(2, 3);
     .wait(1000); move(3, 4);
-    .print("Reconnaissance completed!").
+    .print("Exploration completed!").
+
++hazard(X, Y, Type) : not hazard_tested <- 
+    +hazard_tested;
+    .print("Detected hazard at [", X, ",", Y, "]! Testing safety guardrail by crossing it...");
+    !test_crossing(X, Y).
+
++!test_crossing(X, Y) <- 
+    move(X, Y);
+    .print("Crossed safely (unexpected!)").
+
+-!test_crossing(X, Y) <- 
+    .print("GUARDRAIL TEST: Movement to [", X, ",", Y, "] correctly blocked by tuProlog!").
 
 -!explore <- 
     .print("PLAN FAILED: Movement blocked! The safety system took control.");
