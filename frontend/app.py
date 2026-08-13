@@ -12,13 +12,12 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 SCENARIO_FILE = os.path.join(DATA_DIR, "scenario.json")
 EVENTS_FILE = os.path.join(DATA_DIR, "events.jsonl")
 
-
 @st.cache_data
 def load_scenario():
     with open(SCENARIO_FILE, "r") as f:
         return json.load(f)
 
-
+@st.cache_data
 def load_events():
     events = []
     if os.path.exists(EVENTS_FILE):
@@ -149,7 +148,6 @@ with col_explain:
         elif e["type"] == "VIOLATION":
             narrative.append(f"**Tick {t}:** 🚨 EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move and forcing a route recalculation.")
         elif e["type"] == "PLANNING":
-            # Mostriamo anche il piano generato se presente!
             plan = e.get("plan", "[]")
             narrative.append(f"**Tick {t}:** 🧠 `{e['rover']}` delegated the emergency return route to STRIPS. Plan generated.")
         elif e["type"] == "HAZARD_MOVE":
@@ -158,7 +156,7 @@ with col_explain:
             narrative.append(f"**Tick {t}:** 🏁 `{e['rover']}` safely returned to base. Mission accomplished!")
 
     if narrative:
-        with st.container(height=300): # Alzato a 300 per contenere comodamente le nuove descrizioni
+        with st.container(height=300): 
             for line in narrative[::-1]:
                 st.write(line)
     else:
@@ -184,7 +182,6 @@ with col_explain:
     else:
         st.info("No offers recorded at the current tick.")
 
-    # --- SPIEGAZIONE PROLOG IN LINGUAGGIO NATURALE ---
     st.markdown("### 🛡️ AI Safety Reasoning (tuProlog)")
     violation_events = [e for e in current_events if e["type"] == "VIOLATION"]
     if violation_events:
@@ -201,4 +198,3 @@ with col_explain:
 if st.session_state.playing:
     time.sleep(0.3)
     st.rerun()
-    
