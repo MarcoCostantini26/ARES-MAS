@@ -134,29 +134,38 @@ with col_explain:
     narrative = []
     for e in current_events:
         t = e['tick']
-        if e["type"] == "NEGOTIATION":
+        if e["type"] == "CLAIM":
+            if e.get("success"):
+                narrative.append(f"**Tick {t}:** 🔍 BINGO! `{e['rover']}` physically discovered and locked the mineral at {e['at']}.")
+            else:
+                narrative.append(f"**Tick {t}:** 🚫 `{e['rover']}` found a mineral at {e['at']}, but it was already claimed.")
+        elif e["type"] == "EXTRACT":
+            narrative.append(f"**Tick {t}:** ⛏️ `{e['rover']}` successfully extracted the mineral at {e['at']}. Critical battery level reached.")
+        elif e["type"] == "NEGOTIATION":
             if e["msg_type"] == "cfp":
-                narrative.append(f"**Tick {t}:** 📡 `{e['sender']}` launched a CNP auction.")
+                narrative.append(f"**Tick {t}:** 📡 `{e['sender']}` broadcasted a Call For Proposal (CFP) to all harvesters.")
             elif e["msg_type"] == "accept":
-                narrative.append(f"**Tick {t}:** 🏆 `{e['receiver']}` won the extraction contract.")
+                narrative.append(f"**Tick {t}:** 🏆 `{e['receiver']}` won the extraction contract and is moving to the target.")
         elif e["type"] == "VIOLATION":
-            narrative.append(f"**Tick {t}:** 🚨 `{e['rover']}` attempted a dangerous move to {e['attempted_to']}. Prolog guardrail intervened.")
+            narrative.append(f"**Tick {t}:** 🚨 EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move and forcing a route recalculation.")
         elif e["type"] == "PLANNING":
-            narrative.append(f"**Tick {t}:** 🧠 `{e['rover']}` delegated the return route to STRIPS.")
+            # Mostriamo anche il piano generato se presente!
+            plan = e.get("plan", "[]")
+            narrative.append(f"**Tick {t}:** 🧠 `{e['rover']}` delegated the emergency return route to STRIPS. Plan generated.")
         elif e["type"] == "HAZARD_MOVE":
-            narrative.append(f"**Tick {t}:** 🌪️ The sandstorm moved to {e['to']}.")
+            narrative.append(f"**Tick {t}:** 🌪️ Environmental Update: The sandstorm shifted to {e['to']}.")
         elif e["type"] == "MISSION_COMPLETE":
-            narrative.append(f"**Tick {t}:** 🏁 `{e['rover']}` completed the mission. Sandstorm patrol halted.")
+            narrative.append(f"**Tick {t}:** 🏁 `{e['rover']}` safely returned to base. Mission accomplished!")
 
     if narrative:
-        with st.container(height=150):
+        with st.container(height=300): # Alzato a 300 per contenere comodamente le nuove descrizioni
             for line in narrative[::-1]:
                 st.write(line)
     else:
         st.write("No relevant events recorded yet.")
 
     if hazard_position:
-        st.caption(f"🌪️ Current sandstorm position: {hazard_position}")
+        st.caption(f"🌪️ Current sandstorm position tracking: {hazard_position}")
 
     st.divider()
 
@@ -175,18 +184,19 @@ with col_explain:
     else:
         st.info("No offers recorded at the current tick.")
 
-    st.markdown("### 🛡️ Ethical Guardrail (tuProlog)")
+    # --- SPIEGAZIONE PROLOG IN LINGUAGGIO NATURALE ---
+    st.markdown("### 🛡️ AI Safety Reasoning (tuProlog)")
     violation_events = [e for e in current_events if e["type"] == "VIOLATION"]
     if violation_events:
         v = violation_events[-1]
-        st.error(f"**Violation blocked at Tick {v['tick']}** for agent `{v['rover']}`")
-        st.markdown("**Partial Proof-Tree (failed logical derivation):**")
-        st.code(f"""?- safe_to_move({v['attempted_to'][0]}, {v['attempted_to'][1]}).
--> Rule: {v.get('rule_evaluated', 'N/A')}
--> Blocking fact: {v.get('hazard_matched', 'N/A')}
--> Result: FALSE (action denied)""", language="prolog")
+        st.error(f"**Critical Intervention at Tick {v['tick']}**")
+        st.markdown(f"""
+        **Agent:** `{v['rover']}`  
+        **Action Blocked:** Move to {v['attempted_to']}  
+        **Reasoning Engine Output:** The action was denied because the ethical protocol requires the destination to be clear of dynamic hazards. A severe sandstorm was detected in the exact target coordinates. 
+        """)
     else:
-        st.success("All movements are ethically safe.")
+        st.success("All movements are within safe parameters. No interventions required.")
 
 if st.session_state.playing:
     time.sleep(0.3)

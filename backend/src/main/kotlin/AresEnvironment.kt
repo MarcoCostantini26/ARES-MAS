@@ -175,7 +175,7 @@ class AresEnvironment : Environment() {
             val ev = """{"tick": $tick, "type": "NEGOTIATION", "msg_type": "$msgType", "content": "$content", "sender": "$sender", "receiver": "$receiver"}"""
             logFile.appendText(ev + "\n")
         }
-        
+
         if (functor == "claim_mineral") {
             val x = (action.getTerm(0) as NumberTerm).solve().toInt()
             val y = (action.getTerm(1) as NumberTerm).solve().toInt()
@@ -187,7 +187,7 @@ class AresEnvironment : Environment() {
 
             val ev = """{"tick": $tick, "type": "CLAIM", "rover": "$agName", "at": [$x, $y], "success": $success}"""
             logFile.appendText(ev + "\n")
-            println(if (success) "🔒 $agName claimed mineral at [$x, $y]" else "🚫 $agName's claim on [$x, $y] rejected (already taken)")
+            println(if (success) "$agName claimed mineral at [$x, $y]" else "$agName's claim on [$x, $y] rejected (already taken)")
 
             updatePercepts()
             return success
