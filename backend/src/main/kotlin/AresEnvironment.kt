@@ -16,12 +16,16 @@ data class EntityData(val id: String, val type: String, val position: List<Int>)
 
 class AresEnvironment : Environment() {
 
+    data class MineralState(val id: String, val x: Int, val y: Int, var claimed: Boolean = false)
+
     companion object {
         var gridWidth = 10
         var gridHeight = 10
         var hazardList = listOf<Pair<Int, Int>>()
+        var mineralStates = mutableListOf<MineralState>()
         lateinit var logFile: File
         private var globalTick = 0
+        private val resourceLock = Any()
 
         @Synchronized
         fun nextTick(): Int {
@@ -63,6 +67,9 @@ class AresEnvironment : Environment() {
             gridWidth = scenario.grid.width
             gridHeight = scenario.grid.height
             hazardList = scenario.entities.filter { it.type == "HAZARD" }.map { Pair(it.position[0], it.position[1]) }
+            mineralStates = scenario.entities.filter { it.type == "MINERAL" }
+                .map { MineralState(it.id, it.position[0], it.position[1]) }
+                .toMutableList()
 
             println("🪐 Scenario loaded: ${scenario.entities.size} entities found.")
 
@@ -125,14 +132,11 @@ class AresEnvironment : Environment() {
         if (!isScenarioLoaded) return
         clearPercepts()
 
-        for (entity in scenario.entities) {
-            if (entity.type == "MINERAL") {
-                val x = entity.position[0]
-                val y = entity.position[1]
-                addPercept(Literal.parseLiteral("mineral($x, $y)"))
+        for (m in mineralStates) {
+            if (!m.claimed) {
+                addPercept(Literal.parseLiteral("mineral(${m.x}, ${m.y})"))
             }
         }
-
         for ((x, y) in hazardList) {
             addPercept(Literal.parseLiteral("hazard($x, $y, \"sandstorm\")"))
         }
@@ -171,6 +175,40 @@ class AresEnvironment : Environment() {
             val ev = """{"tick": $tick, "type": "NEGOTIATION", "msg_type": "$msgType", "content": "$content", "sender": "$sender", "receiver": "$receiver"}"""
             logFile.appendText(ev + "\n")
         }
+        
+        if (functor == "claim_mineral") {
+            val x = (action.getTerm(0) as NumberTerm).solve().toInt()
+            val y = (action.getTerm(1) as NumberTerm).solve().toInt()
+
+            val success = synchronized(resourceLock) {
+                val m = mineralStates.find { it.x == x && it.y == y && !it.claimed }
+                if (m != null) { m.claimed = true; true } else false
+            }
+
+            val ev = """{"tick": $tick, "type": "CLAIM", "rover": "$agName", "at": [$x, $y], "success": $success}"""
+            logFile.appendText(ev + "\n")
+            println(if (success) "🔒 $agName claimed mineral at [$x, $y]" else "🚫 $agName's claim on [$x, $y] rejected (already taken)")
+
+            updatePercepts()
+            return success
+        }
+
+        if (functor == "extract") {
+            val x = (action.getTerm(0) as NumberTerm).solve().toInt()
+            val y = (action.getTerm(1) as NumberTerm).solve().toInt()
+
+            synchronized(resourceLock) {
+                mineralStates.removeAll { it.x == x && it.y == y }
+            }
+
+            val ev = """{"tick": $tick, "type": "EXTRACT", "rover": "$agName", "at": [$x, $y]}"""
+            logFile.appendText(ev + "\n")
+            println("⛏️ $agName extracted the mineral at [$x, $y]")
+
+            updatePercepts()
+            return true
+        }
+
         if (functor == "mission_complete") {
             synchronized(engineLock) {
                 if (::hazardTimer.isInitialized) {

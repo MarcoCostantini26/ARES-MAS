@@ -1,11 +1,26 @@
 !explore.
 
 +!explore <- 
+    .my_name(Me);
     .print("Scout online, starting exploration!");
+    !do_patrol(Me).
+
++!do_patrol(scout1) <- 
     .wait(1000); move(1, 1); 
     .wait(1000); move(2, 3);
-    .wait(1000); move(3, 4);
-    .print("Exploration completed!").
+    .wait(1000); move(4, 8); 
+    .print("Exploration completed (Route A)!").
+
++!do_patrol(scout2) <- 
+    .wait(1000); move(8, 1); 
+    .wait(1000); move(8, 3);
+    .wait(1000); move(7, 8);
+   .print("Exploration completed (Route B)!").
+
+-!do_patrol(_) <- 
+    .wait(1000); move(1, 8);
+    .wait(1000); move(3, 6);
+    .print("Exploration completed (default route)!").
 
 +hazard(X, Y, Type) : not hazard_tested <- 
     +hazard_tested;
@@ -26,15 +41,19 @@
 
 +mineral(X, Y) : not already_handled(X, Y) <- 
     +already_handled(X, Y);
+    !try_claim(X, Y).
+
++!try_claim(X, Y) <- 
+    claim_mineral(X, Y);
     .my_name(Me);
-    .print("WOW! I perceived a mineral at coordinates: [", X, ", ", Y, "]!");
-    .print("Broadcasting CFP to all harvesters...");
-    
+    .print("Claim successful for [", X, ",", Y, "]! Launching CFP...");
     log_cnp(cfp, mineral(X,Y), Me, all);
     .broadcast(tell, cfp(mineral(X,Y)));
-    
     .wait(3000);
     !evaluate_proposals(X, Y).
+
+-!try_claim(X, Y) <- 
+    .print("Mineral at [", X, ",", Y, "] already claimed by another scout. Standing down.").
 
 +!evaluate_proposals(X, Y) <-
     .findall(offer(Cost, H), propose(mineral(X,Y), Cost)[source(H)], Offers);

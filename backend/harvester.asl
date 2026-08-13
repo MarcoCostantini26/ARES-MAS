@@ -20,6 +20,7 @@
     .print("YAY! I won the contract for [", X, ", ", Y, "]! I'm going to extract...");
     .wait(1500);
     move(X, Y);
+    extract(X, Y);
     .print("Extraction completed at [", X, ", ", Y, "]!");
     
     .print("CRITICAL BATTERY DETECTED! Requesting route from STRIPS Engine...");

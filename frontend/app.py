@@ -126,7 +126,7 @@ with col_map:
 
     ax.plot(0, 0, "gP", markersize=16, label="Base")
     st.pyplot(fig)
-
+    plt.close(fig) 
 
 with col_explain:
 

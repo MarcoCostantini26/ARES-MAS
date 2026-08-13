@@ -3,6 +3,7 @@ MAS ares_mas {
     environment: ares.AresEnvironment
     agents:
         scout1 scout.asl;
+        scout2 scout.asl;
         harv1 harvester.asl;
         harv2 harvester.asl;
 }
