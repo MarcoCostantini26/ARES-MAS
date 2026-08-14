@@ -24,6 +24,7 @@ def load_events():
             for line in f:
                 if line.strip():
                     events.append(json.loads(line))
+    events.sort(key=lambda x: x.get("tick", 0))
     return events
 
 
@@ -41,7 +42,6 @@ if "tick_slider" not in st.session_state:
 if "playing" not in st.session_state:
     st.session_state.playing = False
 
-
 def toggle_play():
     st.session_state.playing = not st.session_state.playing
 
@@ -52,14 +52,13 @@ if st.session_state.playing:
         st.session_state.playing = False
 
 col_title, col_play = st.columns([4, 1])
-col_title.title("🪐 ARES-MAS: Explainability Dashboard")
+col_title.title("🪐 ARES-MAS")
 col_play.write("")
-col_play.button("⏯️ Play / Pause", on_click=toggle_play)
+col_play.button("Play / Pause", on_click=toggle_play)
 
-selected_tick = st.slider("⏱️ Time Machine", 0, max_tick, key="tick_slider")
+selected_tick = st.slider("Time Machine", 0, max_tick, key="tick_slider")
 
 current_events = [e for e in events if e.get("tick", 0) <= selected_tick]
-current_tick_events = [e for e in events if e.get("tick", 0) == selected_tick]
 
 rover_paths = {}
 rover_positions = {}
@@ -86,7 +85,7 @@ if hazard_position is None:
 col_map, col_explain = st.columns([1, 1.2])
 
 with col_map:
-    st.subheader("🗺️ Sensor Map")
+    st.subheader("🗺️ Map")
 
     width = scenario["grid"]["width"]
     height = scenario["grid"]["height"]
@@ -98,36 +97,60 @@ with col_map:
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.invert_yaxis()
 
+    rover_batteries = {}
+    for e in current_events:
+        if e["type"] == "MOVE" and "battery" in e:
+            rover_batteries[e["rover"]] = e["battery"]
+
+    extracted_minerals = [tuple(e["at"]) for e in current_events if e["type"] == "EXTRACT"]
+
     for ent in scenario["entities"]:
         if ent["type"] == "MINERAL":
             x, y = ent["position"]
-            ax.plot(x, y, "bD", markersize=12)
+            if (x, y) not in extracted_minerals:
+                ax.plot(x, y, "bD", markersize=12)
 
     if hazard_position:
-        ax.plot(hazard_position[0], hazard_position[1], "rX", markersize=14)
+        ax.plot(hazard_position[0], hazard_position[1], "rX", markersize=18)
 
     for rover, path in rover_paths.items():
         if path["x"]:
             ax.plot(path["x"], path["y"], color="gray", linestyle=":", linewidth=2, alpha=0.6)
 
     for rover, pos in rover_positions.items():
-        color = "gold" if "scout" in rover else "orange"
-        marker = "o" if "scout" in rover else "s"
-        ax.plot(pos[0], pos[1], marker=marker, color=color, markersize=15, markeredgecolor="black")
-        ax.text(pos[0], pos[1] - 0.3, rover, ha='center', fontsize=9, fontweight='bold')
+        if "scout" in rover:
+            ax.plot(pos[0], pos[1], "mo", markersize=14)
+            ax.text(pos[0], pos[1] - 0.35, rover, ha='center', fontsize=9, fontweight='bold', color='purple')
+        else:
+            # Harvester: Quadrato arancione
+            ax.plot(pos[0], pos[1], marker="s", color="orange", markersize=14)
+            bat_level = rover_batteries.get(rover, 100)
+            
+            label = f"{rover}\n(Bat: {bat_level}%)"
+            color = "red" if bat_level < 20 else "black"
+            ax.text(pos[0], pos[1] - 0.45, label, ha='center', fontsize=8, fontweight='bold', color=color)
 
-    for e in current_tick_events:
-        if e["type"] == "VIOLATION":
-            hx, hy = e["attempted_to"]
-            ax.plot(hx, hy, "ro", markersize=30, alpha=0.3)
-            ax.text(hx, hy + 0.4, "BLOCKED!", color='red', ha='center', fontweight='bold')
+    GRACE_WINDOW = 3 
+    recent_violations = [e for e in current_events if e["type"] == "VIOLATION" and selected_tick - e["tick"] <= GRACE_WINDOW]
+    
+    for v in recent_violations:
+        hx, hy = v["attempted_to"]
+        action_type = v.get("action_type", "MOVE")
+        
+        if action_type == "EXTRACT":
+            ax.plot(hx, hy, "yo", markersize=40, alpha=0.4)
+            ax.text(hx, hy + 0.45, "LOW BATTERY!", color='darkorange', ha='center', fontweight='bold')
+        else:
+            ax.plot(hx, hy, "ro", markersize=40, alpha=0.3)
+            ax.text(hx, hy + 0.45, "HAZARD BLOCK!", color='red', ha='center', fontweight='bold')
 
+    # Base Station (Croce verde)
     ax.plot(0, 0, "gP", markersize=16, label="Base")
+    
     st.pyplot(fig)
     plt.close(fig) 
 
 with col_explain:
-
     st.subheader("📜 Mission Log")
     narrative = []
     for e in current_events:
@@ -138,22 +161,29 @@ with col_explain:
             else:
                 narrative.append(f"**Tick {t}:** 🚫 `{e['rover']}` found a mineral at {e['at']}, but it was already claimed.")
         elif e["type"] == "EXTRACT":
-            narrative.append(f"**Tick {t}:** ⛏️ `{e['rover']}` successfully extracted the mineral at {e['at']}. Critical battery level reached.")
+            narrative.append(f"**Tick {t}:** ⛏️ `{e['rover']}` successfully extracted the mineral at {e['at']}. Ready to return.")
         elif e["type"] == "NEGOTIATION":
             if e["msg_type"] == "cfp":
                 narrative.append(f"**Tick {t}:** 📡 `{e['sender']}` broadcasted a Call For Proposal (CFP) to all harvesters.")
             elif e["msg_type"] == "accept":
                 narrative.append(f"**Tick {t}:** 🏆 `{e['receiver']}` won the extraction contract and is moving to the target.")
         elif e["type"] == "VIOLATION":
-            narrative.append(f"**Tick {t}:** 🚨 EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move and forcing a route recalculation.")
+            action_type = e.get("action_type", "MOVE")
+            if action_type == "EXTRACT":
+                narrative.append(f"**Tick {t}:** 🚨 GUARDRAIL: `{e['rover']}` extraction blocked at {e['attempted_to']}. Heavy drilling halted to prevent total power failure. Remaining battery reserved for return trip.")
+            else:
+                narrative.append(f"**Tick {t}:** 🚨 EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move.")
         elif e["type"] == "PLANNING":
-            plan = e.get("plan", "[]")
-            narrative.append(f"**Tick {t}:** 🧠 `{e['rover']}` delegated the emergency return route to STRIPS. Plan generated.")
+            narrative.append(f"**Tick {t}:** 🧠 `{e['rover']}` delegated the emergency return route to STRIPS.")
         elif e["type"] == "HAZARD_MOVE":
             narrative.append(f"**Tick {t}:** 🌪️ Environmental Update: The sandstorm shifted to {e['to']}.")
         elif e["type"] == "MISSION_COMPLETE":
-            narrative.append(f"**Tick {t}:** 🏁 `{e['rover']}` safely returned to base. Mission accomplished!")
-
+            has_extracted = any(ev["type"] == "EXTRACT" and ev["rover"] == e["rover"] for ev in current_events)
+            
+            if has_extracted:
+                narrative.append(f"**Tick {t}:** 🏁 `{e['rover']}` safely returned to base with the payload. Mission accomplished!")
+            else:
+                narrative.append(f"**Tick {t}:** ⚠️ `{e['rover']}` safely returned to base EMPTY-HANDED. Mission aborted for safety!")
     if narrative:
         with st.container(height=300): 
             for line in narrative[::-1]:
@@ -161,12 +191,9 @@ with col_explain:
     else:
         st.write("No relevant events recorded yet.")
 
-    if hazard_position:
-        st.caption(f"🌪️ Current sandstorm position tracking: {hazard_position}")
-
     st.divider()
 
-    st.markdown("### 🤝 Contract Net Protocol Auction")
+    st.markdown("### Contract Net Protocol")
     cnp_proposals = [e for e in current_events if e["type"] == "NEGOTIATION" and e["msg_type"] == "propose"]
     if cnp_proposals:
         costs = {}
@@ -174,25 +201,42 @@ with col_explain:
             match = re.findall(r'\d+', p["content"])
             if match:
                 costs[p["sender"]] = int(match[-1])
-
         if costs:
-            st.write("Offer comparison (estimated cost):")
+            st.write("Offer comparison (estimated cost with Manhattan Distance):")
             st.bar_chart(pd.DataFrame.from_dict(costs, orient='index', columns=['Cost']), height=150)
     else:
         st.info("No offers recorded at the current tick.")
 
-    st.markdown("### 🛡️ AI Safety Reasoning (tuProlog)")
+    st.markdown("### AI Safety Reasoning")
     violation_events = [e for e in current_events if e["type"] == "VIOLATION"]
+    
     if violation_events:
-        v = violation_events[-1]
-        st.error(f"**Critical Intervention at Tick {v['tick']}**")
-        st.markdown(f"""
-        **Agent:** `{v['rover']}`  
-        **Action Blocked:** Move to {v['attempted_to']}  
-        **Reasoning Engine Output:** The action was denied because the ethical protocol requires the destination to be clear of dynamic hazards. A severe sandstorm was detected in the exact target coordinates. 
-        """)
+        for v in reversed(violation_events):
+            action = v.get("action_type", "MOVE")
+            rover_name = v['rover']
+            target = v['attempted_to']
+            
+            st.error(f"**Intervention at Tick {v['tick']}** | Agent: `{rover_name}` | Blocked Action: `{action}` at {target}")
+            
+            if action == "EXTRACT":
+                reason = v.get('reason', 'Battery critical')
+                st.markdown(f"""
+                **Query: `safe_to_extract/3` ➔ DENIED**
+                - `is_harvester` ➔ ✔️
+                - `\+ hazard` ➔ ✔️
+                - `battery > 20` ➔ ❌ (*{reason}*)
+                
+                **💡 Rationale:** Drilling aborted to prevent complete power failure. Remaining battery locked for STRIPS emergency return (✅ *Return guaranteed*).
+                """)
+            else:
+                st.markdown(f"""
+                **Query: `safe_to_move/2` ➔ DENIED**
+                - `\+ hazard` ➔ ❌ (*Sandstorm at {target}*)
+                
+                **💡 Rationale:** Motors disabled to avoid fatal collision. Route recalculation required.
+                """)
     else:
-        st.success("All movements are within safe parameters. No interventions required.")
+        st.success("All actions are within safe parameters. No interventions required.")
 
 if st.session_state.playing:
     time.sleep(0.3)

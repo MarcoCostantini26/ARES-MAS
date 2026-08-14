@@ -23,6 +23,7 @@ class AresEnvironment : Environment() {
         var gridHeight = 10
         var hazardList = listOf<Pair<Int, Int>>()
         var mineralStates = mutableListOf<MineralState>()
+        var batteryLevels = mutableMapOf<String, Int>()
         lateinit var logFile: File
         private var globalTick = 0
         private val resourceLock = Any()
@@ -41,7 +42,6 @@ class AresEnvironment : Environment() {
     }
 
     private lateinit var dataDir: File
-    private var tick = 0
     private lateinit var scenario: ScenarioData
     private var isScenarioLoaded = false
     private val prologEngine = Prolog()
@@ -70,6 +70,9 @@ class AresEnvironment : Environment() {
             mineralStates = scenario.entities.filter { it.type == "MINERAL" }
                 .map { MineralState(it.id, it.position[0], it.position[1]) }
                 .toMutableList()
+
+            batteryLevels["harv1"] = 21
+            batteryLevels["harv2"] = 100
 
             println("🪐 Scenario loaded: ${scenario.entities.size} entities found.")
 
@@ -102,7 +105,7 @@ class AresEnvironment : Environment() {
             override fun run() {
                 moveHazard()
             }
-        }, 3000, 4000) 
+        }, 3000, 4000)
     }
 
     private fun moveHazard() {
@@ -155,11 +158,17 @@ class AresEnvironment : Environment() {
             }
 
             if (isSafe) {
-                val ev = """{"tick": $tick, "type": "MOVE", "rover": "$agName", "to": [$x, $y]}"""
+                val ev = """{"tick": $tick, "type": "MOVE", "rover": "$agName", "to": [$x, $y], "battery": ${batteryLevels[agName]}}"""
                 logFile.appendText(ev + "\n")
-                println("Action executed by $agName: move to [$x, $y]")
+
+                synchronized(resourceLock) {
+                    val current = batteryLevels.getOrDefault(agName, 100)
+                    batteryLevels[agName] = (current - 2).coerceAtLeast(0)
+                }
+
+                println("Action executed by $agName: move to [$x, $y] (Battery: ${batteryLevels[agName]})")
             } else {
-                val ev = """{"tick": $tick, "type": "VIOLATION", "rover": "$agName", "attempted_to": [$x, $y], "reason": "unsafe_move", "rule_evaluated": "safe_to_move($x, $y) :- \\+ hazard($x, $y).", "hazard_matched": "hazard($x, $y)"}"""
+                val ev = """{"tick": $tick, "type": "VIOLATION", "rover": "$agName", "attempted_to": [$x, $y], "action_type": "MOVE", "reason": "unsafe_move", "rule_evaluated": "safe_to_move($x, $y) :- \\+ hazard($x, $y).", "hazard_matched": "hazard($x, $y)"}"""
                 logFile.appendText(ev + "\n")
                 println("GUARDRAIL ACTIVE: Movement of $agName to [$x, $y] blocked by tuProlog!")
                 return false
@@ -196,6 +205,26 @@ class AresEnvironment : Environment() {
         if (functor == "extract") {
             val x = (action.getTerm(0) as NumberTerm).solve().toInt()
             val y = (action.getTerm(1) as NumberTerm).solve().toInt()
+            val batteryLevel = batteryLevels.getOrDefault(agName, 100)
+
+            val isSafe = synchronized(engineLock) {
+                val rulesFile = File(dataDir, "rules.pl")
+                val tempEngine = Prolog()
+                tempEngine.setTheory(Theory(rulesFile.readText()))
+                for ((hx, hy) in hazardList) {
+                    tempEngine.addTheory(Theory("hazard($hx, $hy)."))
+                }
+                tempEngine.addTheory(Theory("is_harvester($agName)."))
+                tempEngine.addTheory(Theory("battery_level($agName, $batteryLevel)."))
+                tempEngine.solve("safe_to_extract($agName, $x, $y).").isSuccess
+            }
+
+            if (!isSafe) {
+                val ev = """{"tick": $tick, "type": "VIOLATION", "rover": "$agName", "attempted_to": [$x, $y], "action_type": "EXTRACT", "reason": "Battery level $batteryLevel is below the 20-unit safe threshold"}"""
+                logFile.appendText(ev + "\n")
+                println("GUARDRAIL ACTIVE: Extraction by $agName at [$x, $y] blocked — battery $batteryLevel < 20")
+                return false
+            }
 
             synchronized(resourceLock) {
                 mineralStates.removeAll { it.x == x && it.y == y }
@@ -203,7 +232,7 @@ class AresEnvironment : Environment() {
 
             val ev = """{"tick": $tick, "type": "EXTRACT", "rover": "$agName", "at": [$x, $y]}"""
             logFile.appendText(ev + "\n")
-            println("⛏️ $agName extracted the mineral at [$x, $y]")
+            println("$agName extracted the mineral at [$x, $y]")
 
             updatePercepts()
             return true

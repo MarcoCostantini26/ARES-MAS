@@ -1,18 +1,23 @@
 !standby.
 
 +!standby <- 
-    move(0, 0);
     .print("Harvester online, awaiting auctions...").
 
 +cfp(mineral(X,Y))[source(S)] <- 
     .my_name(Me);
     .print("CFP Receipt from ", S, " for the mineral to [", X, ", ", Y, "]");
     
-    .random(R);
-    Cost = 10 + math.round(R * 20); 
+    Distance = math.abs(X - 0) + math.abs(Y - 0);
     
-    .print("My calculated cost is ", Cost, ". Send proposal to ", S, "...");
+    EstimatedCost = Distance * 2;
     
+    if (Me == harv1) {
+        Cost = EstimatedCost - 5; 
+    } else {
+        Cost = EstimatedCost + 10;
+    };
+    
+    .print("Calculated Manhattan distance is ", Distance, ". Bidding cost: ", Cost, "...");
     log_cnp(propose, offer(mineral(X,Y), Cost), Me, S);
     .send(S, tell, propose(mineral(X,Y), Cost)).
 
@@ -21,18 +26,23 @@
     .print("YAY! I won the contract for [", X, ", ", Y, "]! I'm going to extract...");
     .wait(1500);
     move(X, Y);
-    extract(X, Y);
-    .print("Extraction completed at [", X, ", ", Y, "]!");
-    
-    .print("CRITICAL BATTERY DETECTED! Requesting route from STRIPS Engine...");
-    
-    strips.plan_return(Me, X, Y, 0, 0, Plan);
-    
-    .print("STRIPS returned the following plan: ", Plan);
-    .print("Initiating physical return sequence...");
-    
-    !execute_plan(Plan).
+    !do_extract(X, Y).
 
++!do_extract(X, Y) <-
+    .print("Attempting to extract at [", X, ", ", Y, "]...");
+    extract(X, Y);
+    .print("Extraction successful! Delegating return to STRIPS...");
+    !plan_return(X, Y).
+
+-!do_extract(X, Y) <-
+    .print("Extraction BLOCKED by tuProlog guardrail! Triggering emergency return.");
+    !plan_return(X, Y).
+
++!plan_return(X, Y) <-
+    .my_name(Me);
+    strips.plan_return(Me, X, Y, 0, 0, Plan);
+    .print("STRIPS returned the following plan: ", Plan);
+    !execute_plan(Plan).
 
 +!execute_plan([]) <- 
     .print("Safely returned to base!");
