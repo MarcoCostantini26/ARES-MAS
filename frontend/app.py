@@ -17,7 +17,6 @@ def load_scenario():
     with open(SCENARIO_FILE, "r") as f:
         return json.load(f)
 
-@st.cache_data
 def load_events():
     events = []
     if os.path.exists(EVENTS_FILE):

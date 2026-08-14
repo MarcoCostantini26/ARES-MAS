@@ -1,6 +1,7 @@
 !standby.
 
 +!standby <- 
+    move(0, 0);
     .print("Harvester online, awaiting auctions...").
 
 +cfp(mineral(X,Y))[source(S)] <- 
