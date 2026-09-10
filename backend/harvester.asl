@@ -23,7 +23,7 @@
 
 +accept(mineral(X,Y))[source(S)] <- 
     .my_name(Me);
-    .print("YAY! I won the contract for [", X, ", ", Y, "]! I'm going to extract...");
+    .print("I won the contract for [", X, ", ", Y, "]! I'm going to extract...");
     .wait(1500);
     move(X, Y);
     !do_extract(X, Y).

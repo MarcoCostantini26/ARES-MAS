@@ -74,7 +74,7 @@ class AresEnvironment : Environment() {
             batteryLevels["harv1"] = 21
             batteryLevels["harv2"] = 100
 
-            println("🪐 Scenario loaded: ${scenario.entities.size} entities found.")
+            println("Scenario loaded: ${scenario.entities.size} entities found.")
 
             val rulesFile = File(dataDir, "rules.pl")
             if (rulesFile.exists()) {

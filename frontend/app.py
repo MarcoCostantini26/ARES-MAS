@@ -85,7 +85,7 @@ if hazard_position is None:
 col_map, col_explain = st.columns([1, 1.2])
 
 with col_map:
-    st.subheader("🗺️ Map")
+    st.subheader("Map")
 
     width = scenario["grid"]["width"]
     height = scenario["grid"]["height"]
@@ -122,7 +122,6 @@ with col_map:
             ax.plot(pos[0], pos[1], "mo", markersize=14)
             ax.text(pos[0], pos[1] - 0.35, rover, ha='center', fontsize=9, fontweight='bold', color='purple')
         else:
-            # Harvester: Quadrato arancione
             ax.plot(pos[0], pos[1], marker="s", color="orange", markersize=14)
             bat_level = rover_batteries.get(rover, 100)
             
@@ -144,46 +143,45 @@ with col_map:
             ax.plot(hx, hy, "ro", markersize=40, alpha=0.3)
             ax.text(hx, hy + 0.45, "HAZARD BLOCK!", color='red', ha='center', fontweight='bold')
 
-    # Base Station (Croce verde)
     ax.plot(0, 0, "gP", markersize=16, label="Base")
     
     st.pyplot(fig)
     plt.close(fig) 
 
 with col_explain:
-    st.subheader("📜 Mission Log")
+    st.subheader("Mission Log")
     narrative = []
     for e in current_events:
         t = e['tick']
         if e["type"] == "CLAIM":
             if e.get("success"):
-                narrative.append(f"**Tick {t}:** 🔍 BINGO! `{e['rover']}` physically discovered and locked the mineral at {e['at']}.")
+                narrative.append(f"**Tick {t}:** `{e['rover']}` physically discovered and locked the mineral at {e['at']}.")
             else:
-                narrative.append(f"**Tick {t}:** 🚫 `{e['rover']}` found a mineral at {e['at']}, but it was already claimed.")
+                narrative.append(f"**Tick {t}:**`{e['rover']}` found a mineral at {e['at']}, but it was already claimed.")
         elif e["type"] == "EXTRACT":
-            narrative.append(f"**Tick {t}:** ⛏️ `{e['rover']}` successfully extracted the mineral at {e['at']}. Ready to return.")
+            narrative.append(f"**Tick {t}:**`{e['rover']}` successfully extracted the mineral at {e['at']}. Ready to return.")
         elif e["type"] == "NEGOTIATION":
             if e["msg_type"] == "cfp":
-                narrative.append(f"**Tick {t}:** 📡 `{e['sender']}` broadcasted a Call For Proposal (CFP) to all harvesters.")
+                narrative.append(f"**Tick {t}:**`{e['sender']}` broadcasted a Call For Proposal (CFP) to all harvesters.")
             elif e["msg_type"] == "accept":
-                narrative.append(f"**Tick {t}:** 🏆 `{e['receiver']}` won the extraction contract and is moving to the target.")
+                narrative.append(f"**Tick {t}:**`{e['receiver']}` won the extraction contract and is moving to the target.")
         elif e["type"] == "VIOLATION":
             action_type = e.get("action_type", "MOVE")
             if action_type == "EXTRACT":
-                narrative.append(f"**Tick {t}:** 🚨 GUARDRAIL: `{e['rover']}` extraction blocked at {e['attempted_to']}. Heavy drilling halted to prevent total power failure. Remaining battery reserved for return trip.")
+                narrative.append(f"**Tick {t}:**GUARDRAIL: `{e['rover']}` extraction blocked at {e['attempted_to']}. Heavy drilling halted to prevent total power failure. Remaining battery reserved for return trip.")
             else:
-                narrative.append(f"**Tick {t}:** 🚨 EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move.")
+                narrative.append(f"**Tick {t}:**EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move.")
         elif e["type"] == "PLANNING":
-            narrative.append(f"**Tick {t}:** 🧠 `{e['rover']}` delegated the emergency return route to STRIPS.")
+            narrative.append(f"**Tick {t}:**`{e['rover']}` delegated the emergency return route to STRIPS.")
         elif e["type"] == "HAZARD_MOVE":
-            narrative.append(f"**Tick {t}:** 🌪️ Environmental Update: The sandstorm shifted to {e['to']}.")
+            narrative.append(f"**Tick {t}:**Environmental Update: The sandstorm shifted to {e['to']}.")
         elif e["type"] == "MISSION_COMPLETE":
             has_extracted = any(ev["type"] == "EXTRACT" and ev["rover"] == e["rover"] for ev in current_events)
             
             if has_extracted:
-                narrative.append(f"**Tick {t}:** 🏁 `{e['rover']}` safely returned to base with the payload. Mission accomplished!")
+                narrative.append(f"**Tick {t}:**`{e['rover']}` safely returned to base with the payload. Mission accomplished!")
             else:
-                narrative.append(f"**Tick {t}:** ⚠️ `{e['rover']}` safely returned to base EMPTY-HANDED. Mission aborted for safety!")
+                narrative.append(f"**Tick {t}:**`{e['rover']}` safely returned to base EMPTY-HANDED. Mission aborted for safety!")
     if narrative:
         with st.container(height=300): 
             for line in narrative[::-1]:

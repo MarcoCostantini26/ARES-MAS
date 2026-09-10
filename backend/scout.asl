@@ -13,7 +13,7 @@
 
 @mineral_found[atomic]
 +at(X,Y) : mineral(X,Y) & not already_handled(X,Y) <- 
-    .print("BINGO! I physically found a mineral during my patrol at [", X, ",", Y, "]!");
+    .print("I physically found a mineral during my patrol at [", X, ",", Y, "]!");
     +already_handled(X,Y);
     !try_claim(X, Y).
 
