@@ -168,13 +168,13 @@ with col_explain:
         elif e["type"] == "VIOLATION":
             action_type = e.get("action_type", "MOVE")
             if action_type == "EXTRACT":
-                narrative.append(f"**Tick {t}:**GUARDRAIL: `{e['rover']}` extraction blocked at {e['attempted_to']}. Heavy drilling halted to prevent total power failure. Remaining battery reserved for return trip.")
+                narrative.append(f"**Tick {t}:** GUARDRAIL: `{e['rover']}` extraction blocked at {e['attempted_to']}. Heavy drilling halted to prevent total power failure. Remaining battery reserved for return trip.")
             else:
-                narrative.append(f"**Tick {t}:**EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move.")
+                narrative.append(f"**Tick {t}:** EMERGENCY: `{e['rover']}` almost entered a hazard zone at {e['attempted_to']}. tuProlog intervened, blocking the move.")
         elif e["type"] == "PLANNING":
             narrative.append(f"**Tick {t}:**`{e['rover']}` delegated the emergency return route to STRIPS.")
         elif e["type"] == "HAZARD_MOVE":
-            narrative.append(f"**Tick {t}:**Environmental Update: The sandstorm shifted to {e['to']}.")
+            narrative.append(f"**Tick {t}:** Environmental Update: The sandstorm shifted to {e['to']}.")
         elif e["type"] == "MISSION_COMPLETE":
             has_extracted = any(ev["type"] == "EXTRACT" and ev["rover"] == e["rover"] for ev in current_events)
             
